@@ -1,0 +1,39 @@
+name: Capture Commit To Local Agent
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  notify-local-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Extract commit info
+        id: commit
+        run: |
+          echo "MESSAGE<<EOF" >> $GITHUB_OUTPUT
+          git log -1 --pretty=%B >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "AUTHOR=$(git log -1 --pretty=%an)" >> $GITHUB_OUTPUT
+
+      - name: Get changed files
+        id: files
+        run: |
+          FILES=$(git diff-tree --no-commit-id --name-only -r HEAD | tr '\n' ',')
+          echo "FILES=$FILES" >> $GITHUB_OUTPUT
+
+      - name: Send commit payload to local FastAPI
+        run: |
+          curl -X POST https://YOUR_NGROK_URL/commit-event \
+          -H "Content-Type: application/json" \
+          -d '{
+            "repository": "${{ github.repository }}",
+            "author": "${{ steps.commit.outputs.AUTHOR }}",
+            "message": "${{ steps.commit.outputs.MESSAGE }}",
+            "files": "${{ steps.files.outputs.FILES }}"
+          }'
